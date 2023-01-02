@@ -1,0 +1,5 @@
+Runserver - uvicorn setup/main:app --reload
+Shell - flask --app setup/main shell
+Create Migrations Repository - flask --app setup/main db init
+Make Migrations - flask --app setup/main db migrate -m "Migration title"
+Migrate to db - flask --app setup/main db upgrade

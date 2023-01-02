@@ -1,0 +1,47 @@
+{% extends "accounts/index.html" %}
+{% block title %}Register{% endblock %}
+{% block content %}
+	<h1 style="font-weight: bold;">WWC V4 SIGNUP FORM</h1>
+	<div class="main-agileinfo">
+		<div class="agileits-top">
+			<form method="post" class="register-form">
+				{% for field in form if not field.name == 'terms_agreement' %}
+					{{field}}
+					{% for error in field.errors  %}
+						<p style="text-align: left; margin-top: 5px;">{{error}}</p>
+					{% else %}
+						<p></p>
+					{% endfor %}
+				{% endfor %}
+				
+
+				<div class="wthree-text" >
+					<label class="anim">
+						{{form.terms_agreement(class="checkbox")}}
+						<span>I Agree To The Terms & Conditions</span>
+					</label>
+					<div class="clear"> </div>
+				</div>
+				<input id="submit-btn" type="submit" value="SIGNUP">
+			</form>
+			<p>Already have an Account? <a href="{{url_for('login')}}"> Login Now!</a></p>
+		</div>
+	</div>
+{% endblock %}
+
+{% block js %}
+	<script type="text/javascript">
+		var localtz = Intl.DateTimeFormat().resolvedOptions().timeZone // Get local timezone
+		var select_element = document.getElementById('tz') // Get select element
+		var options = Array.from(document.querySelectorAll('option')); 
+		try{
+			var optionMatch = options.find(el => {
+				return el.textContent == localtz;
+			});
+
+			select_element.value = optionMatch.value
+		}catch{
+			select_element.value = ''   
+		}
+    </script>
+{% endblock %}

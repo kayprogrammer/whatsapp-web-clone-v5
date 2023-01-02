@@ -1,0 +1,112 @@
+<!--
+Author: Colorlib
+Author URL: https://colorlib.com
+License: Creative Commons Attribution 3.0 Unported
+License URL: http://creativecommons.org/licenses/by/3.0/
+-->
+<!DOCTYPE html>
+<html>
+<head>
+<title>Whatsapp Web Clone V1 | {% block title %}{% endblock %}</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+<script type="application/x-javascript"> addEventListener("load", function() { setTimeout(hideURLbar, 0); }, false); function hideURLbar(){ window.scrollTo(0,1); } </script>
+<!-- Custom Theme files -->
+<link href="{{ url_for('static', path = 'css/register.css') }}" rel="stylesheet" type="text/css" media="all" />
+<link rel="shortcut icon" href="{{ url_for('static', path = 'media/whatsapp.png') }}" type="image/x-icon">
+
+<!-- //Custom Theme files -->
+<!-- web font -->
+<link href="//fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i" rel="stylesheet">
+<!-- //web font -->
+<!--Sweet alert-->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@10.10.1/dist/sweetalert2.min.css">
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@10.10.1/dist/sweetalert2.all.min.js"></script>
+
+<style>
+	.register-form p, .login-form p:not(:last-child){
+		display: inline-block;
+		font-weight: bold; 
+		font-size: 11px; 
+		color: gold; 
+		margin-bottom:2em ;
+		
+	}
+	
+	@media(max-width:600px){
+		.register-form p{
+			margin-bottom:1.5em ;
+		}	
+	}
+</style>
+</head>
+<body>
+	{% for message in get_flashed_messages(request) %}
+	<script>
+	   
+	   Swal.fire({
+ 
+		title: "{{ message.category.heading.title() }}",
+		// success , error , warning ,info
+
+		text: "{{ message.message }}",
+		// Custom message flashed from your flask routes
+
+		icon:"{{ message.category.tag }}",
+		// success , error , warning ,info
+		timer: 3500
+
+	   })
+ 
+	</script>
+	{% endfor %}
+	<!-- main -->
+	<div class="main-w3layouts wrapper">
+        {% block content %}
+        {% endblock %}
+		<!-- copyright -->
+		<div class="colorlibcopy-agile">
+			<p id="copyright-date"></p>
+		</div>
+		<!-- //copyright -->
+		<ul class="colorlib-bubbles">
+			<li></li>
+			<li></li>
+			<li></li>
+			<li></li>
+			<li></li>
+			<li></li>
+			<li></li>
+			<li></li>
+			<li></li>
+			<li></li>
+		</ul>
+	</div>
+	<!-- //main -->
+	<script src="{{ url_for('static', path = 'vendors/js/jquery-3.6.1.min.js') }}"></script>
+	<script>
+		window.onload = function() {
+			var year = new Date().getFullYear()
+			document.getElementById('copyright-date').innerHTML = `© ${year} Whatsapp Web Clone V4. All rights reserved | Design by <a href="https://colorlib.com/" target="_blank">Colorlib</a>`
+		}
+		$.ajaxSetup({
+			headers: {"X-CSRFToken": '{{csrf_token}}'}
+		})
+
+		/* Sweetify Toast Config */
+		const Toast = Swal.mixin({
+            toast: true,
+            position: 'top-right',
+            iconColor: 'white',
+            customClass: {
+                popup: 'colored-toast'
+            },
+            showConfirmButton: false,
+            timer: 2000,
+            timerProgressBar: true
+        })
+    </script>
+    {% block js %}
+    {% endblock %}
+</body>
+</html>

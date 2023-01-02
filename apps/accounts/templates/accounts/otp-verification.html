@@ -1,0 +1,17 @@
+{% extends "accounts/index.html" %}
+{% block title %}Verify Phone Number{% endblock %}
+{% block content %}
+	<h1 style="font-weight: bold;">WWC V1 VERIFY PHONE NUMBER</h1>
+	<div class="main-agileinfo">
+		<div class="agileits-top">
+			<p style="font-weight: bold; margin-bottom: 10px;">Complete verification by entering the 6 digit <br>code sent to your phone number!</p>
+			<form method="post" class="register-form">
+				{{ form.csrf_token }}
+				{{form.otp(placeholder="Enter Otp")}}
+				{% for error in form.otp.errors %}<p>{{error}}</p>{% endfor %}
+				<input type="submit" value="SUBMIT">
+			</form>
+			<p>Didn't get an OTP? <a style="cursor: pointer;" href="{{url_for('resend_otp')}}" class="resend-otp"> Resend OTP!</a></p>
+		</div>
+	</div>
+{% endblock %}

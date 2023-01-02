@@ -1,0 +1,24 @@
+{% extends "accounts/index.html" %}
+{% block title %}Register{% endblock %}
+{% block content %}
+	<h1 style="font-weight: bold;">WWC V4 LOGIN FORM</h1>
+	<div class="main-agileinfo">
+		<div class="agileits-top">
+			<form method="post" class="login-form">
+				{{ form.csrf_token }}
+				{{form.email_or_phone(placeholder="Email or Phone")}}
+				<p class="error"></p>
+				{{form.password(placeholder="Password")}}
+				<p class="error"></p>
+
+				<div class="wthree-text" >
+				<input id="submit-btn" type="submit" value="LOGIN">
+			</form>
+			<p>
+				Don't have an Account? <a href="{{ url_for('register') }}"> Register Now!</a>
+				<br>Forgot Password? <a href="{{ url_for('password_reset_request') }}">Click Here</a>
+			</p>
+			
+		</div>
+	</div>
+{% endblock %}
