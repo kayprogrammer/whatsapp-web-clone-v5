@@ -30,12 +30,12 @@ class UserManager(object):
         kwargs.pop('tz', None)
         kwargs['tz_id'] = timezone.pkid
         kwargs['is_admin'] = False
-        kwargs['password'] = Hasher.get_password_hash(password)
+        hashed_password = Hasher.get_password_hash(password)
+        kwargs['password'] = hashed_password
         obj = cls(**kwargs)
         db.add(obj)
         db.commit()
         db.refresh(obj)
-        obj.password = None
         return obj
 
     @classmethod
@@ -69,7 +69,6 @@ class UserManager(object):
         db.add(obj)
         db.commit()
         db.refresh(obj)
-        obj.password = None
         return obj
 
 class OtpManager(object):

@@ -10,6 +10,7 @@ from apps.common.models import TimeStampedUUIDModel
 
 from datetime import datetime
 
+from . hashers import Hasher
 
 from . validators import *
 from . choices import *
@@ -100,6 +101,9 @@ class User(UserManager, TimeStampedUUIDModel):
             return tz_name.name
         return 'UTC'
 
+    def check_password(self, value):
+        """Check password."""
+        return Hasher.verify_password(value, self.password)
 class Otp(OtpManager, TimeStampedUUIDModel):
     __tablename__ = 'otp'
 

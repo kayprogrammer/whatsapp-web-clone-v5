@@ -127,15 +127,14 @@ async def login(request: Request, response_class = HTMLResponse, db: Session = D
         user = User.query.filter_by(email=form.email_or_phone.data).first() or User.query.filter_by(phone=form.email_or_phone.data).first()
         if not user:
             flash(request, "Invalid credentials.", {"heading": "Error!", "tag": "error"})
-            return RedirectResponse(request.url_for('login'))
+            return templates.TemplateResponse('accounts/login.html', {'request': request, 'form':form})
         password_check = user.check_password(form.password.data)
         if password_check == False:
             flash(request, "Invalid credentials.", {"heading": "Error!", "tag": "error"})
-            return RedirectResponse(request.url_for('login')) 
-
+            return templates.TemplateResponse('accounts/login.html', {'request': request, 'form':form}) 
         if not user.is_email_verified:
             await Util.send_verification_email(request, user, db)
-            return templates.TemplateResponse('accounts/email-activation-request.html', detail='request', email=user.email)
+            return templates.TemplateResponse('accounts/email-activation-request.html', {'request': request, 'detail': 'request', 'email': user.email})
 
         if not user.is_phone_verified:
             Util.send_sms_otp(user, db)
@@ -143,7 +142,7 @@ async def login(request: Request, response_class = HTMLResponse, db: Session = D
             return RedirectResponse(request.url_for('verify_otp'))
         login_user(user)
         return RedirectResponse(request.url_for("home"))
-    return templates.TemplateResponse('accounts/login.html', form=form)
+    return templates.TemplateResponse('accounts/login.html', {'request': request, 'form':form})
 
 @accountsrouter.api_route('/logout', methods=['GET'])
 def logout(request: Request, ):
