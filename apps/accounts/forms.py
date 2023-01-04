@@ -101,13 +101,14 @@ class OtpVerificationForm(Form):
 
     def __init__(self, *args, **kwargs):
         super(OtpVerificationForm, self).__init__(*args, **kwargs)
-        self.user = None
+        self.request = kwargs['request']
+        self.db = kwargs['db']
 
     def validate(self):
         initial_validation = super(OtpVerificationForm, self).validate()
         if not initial_validation:
             return False
-        phone = session.get('phone')
+        phone = self.request.session.get('verification_phone')
         otp = self.otp.data
         user = User.query.filter_by(phone=phone).first()
 
@@ -120,7 +121,7 @@ class OtpVerificationForm(Form):
             self.otp.errors.append('Expired Otp')
             return False
         user.is_phone_verified = True
-        db.session.commit()
+        self.db.commit()
         if user.is_email_verified:
             Util.send_welcome_email(request, user)
         return otp

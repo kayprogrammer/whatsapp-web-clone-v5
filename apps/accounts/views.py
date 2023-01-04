@@ -1,4 +1,5 @@
 from fastapi import Request, APIRouter, Form
+from fastapi.security import OAuth2PasswordBearer
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -8,7 +9,7 @@ from fastapi import Depends
 from fastapi.templating import Jinja2Templates
 
 from setup.database import get_db
-from setup.extensions import manager, get_flashed_messages, flash
+from setup.extensions import get_flashed_messages, flash
 
 from sqlalchemy.orm import Session
 from . senders import Util
@@ -21,6 +22,15 @@ TEMPLATE_DIR = BASE_DIR / "templates"
 accountsrouter = APIRouter(tags=['accounts'])
 templates = Jinja2Templates(directory=TEMPLATE_DIR)
 templates.env.globals['get_flashed_messages'] = get_flashed_messages
+
+# Get current user
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl = "/login", scheme_name="JWT")
+async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
+    user = Token.decodeJWT(db, token) # check access token validity. returns user object or None
+    if not user:
+        raise HTTPException(status_code = 401, detail='Signature invalid or expired')
+
+    return user
 
 @accountsrouter.api_route('/register/', methods=['GET', 'POST'])
 async def register(request: Request, response_class = HTMLResponse, db: Session = Depends(get_db)):
@@ -86,13 +96,13 @@ async def resend_activation_email(request: Request, response_class = HTMLRespons
     return templates.TemplateResponse('accounts/email-activation-request.html', {'request': request, 'detail':'resent', 'email':email})
 
 @accountsrouter.api_route('/verify-otp', methods=['GET', 'POST'])
-async def verify_otp(request: Request, response_class = HTMLResponse):
+async def verify_otp(request: Request, response_class = HTMLResponse, db: Session = Depends(get_db)):
     form_data = await request.form()
     phone = request.session.get('verification_phone')
     if not phone:
         flash(request, "Back to login!.", {"heading": "Error!", "tag": "error"})
         return RedirectResponse(request.url_for('login'))
-    form = OtpVerificationForm(form_data)
+    form = OtpVerificationForm(form_data, request=request, db=db)
     if request.method == 'POST' and form.validate():
         flash(request, "You can login now.", {"heading": "Verification complete!", "tag": "success"})
         return RedirectResponse(request.url_for('login'))
@@ -132,6 +142,7 @@ async def login(request: Request, response_class = HTMLResponse, db: Session = D
         if password_check == False:
             flash(request, "Invalid credentials.", {"heading": "Error!", "tag": "error"})
             return templates.TemplateResponse('accounts/login.html', {'request': request, 'form':form}) 
+        # print()
         if not user.is_email_verified:
             await Util.send_verification_email(request, user, db)
             return templates.TemplateResponse('accounts/email-activation-request.html', {'request': request, 'detail': 'request', 'email': user.email})
@@ -140,14 +151,17 @@ async def login(request: Request, response_class = HTMLResponse, db: Session = D
             Util.send_sms_otp(user, db)
             request.session['verification_phone'] = user.phone
             return RedirectResponse(request.url_for('verify_otp'))
-        login_user(user)
-        return RedirectResponse(request.url_for("home"))
+        response = RedirectResponse(request.url_for("home"))
+        access_token = Token.get_access_token({"user_id": str(user.id)})
+        response.set_cookie(key="access_token", value=f"Bearer {access_token}", httponly=True)
+        return response
     return templates.TemplateResponse('accounts/login.html', {'request': request, 'form':form})
 
-@accountsrouter.api_route('/logout', methods=['GET'])
-def logout(request: Request, ):
-    logout_user()
-    return RedirectResponse(request.url_for('login'))
+@accountsrouter.api_route('/logout', methods=['GET'], )
+def logout(request: Request, user: User = Depends(get_current_user)):
+    response = RedirectResponse(request.url_for('login'))
+    response.delete_cookie("access_token")
+    return response
 
 @accountsrouter.api_route('/request-password-reset', methods=['GET', 'POST'])
 async def password_reset_request(request: Request, ):
@@ -208,7 +222,3 @@ async def resend_password_token(request: Request, email):
     
     await Util.send_password_reset_email(request, user, db)
     return templates.TemplateResponse('accounts/password-reset-request.html', detail=detail, form=None)
-
-@manager.user_loader()
-async def load_user(user_id:str, db: Session = Depends(get_db)):
-    return await User.query.filter_by(id=user_id).first()

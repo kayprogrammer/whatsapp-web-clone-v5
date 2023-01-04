@@ -46,29 +46,25 @@
 </head>
 
 <body class="body">
-    {% with messages = get_flashed_messages(with_categories=true) %}
-	{% if messages %}
-	{% for category, message in messages %}
+    {% for message in get_flashed_messages(request) %}
 	<script>
 	   
-       Swal.fire({
+	   Swal.fire({
  
-        title: "{{ category.heading.title() }}",
-        // success , error , warning ,info
+		title: "{{ message.category.heading.title() }}",
+		// success , error , warning ,info
 
-        text: "{{ message }}",
-        // Custom message flashed from your flask routes
+		text: "{{ message.message }}",
+		// Custom message flashed from your flask routes
 
-        icon:"{{ category.tag }}",
-        // success , error , warning ,info
-        timer: 3500
+		icon:"{{ message.category.tag }}",
+		// success , error , warning ,info
+		timer: 3500
 
-       })
+	   })
  
 	</script>
 	{% endfor %}
-	{% endif %}
-	{% endwith %}
 
     <h1 class="media">Only Available On Desktop 😊😇
         <hr>

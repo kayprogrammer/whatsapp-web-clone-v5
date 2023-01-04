@@ -2,18 +2,27 @@ from fastapi import FastAPI, Request, APIRouter
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
+from sqlalchemy.orm import Session
 from sqlalchemy import or_, case, literal_column
 from apps.accounts.models import User
+from apps.accounts.views import get_current_user
 from fastapi import Depends
 from fastapi.templating import Jinja2Templates
+from  pathlib import Path
+
+from setup.extensions import get_flashed_messages, flash
+from setup.database import get_db
 
 from . models import Message
 from . emojis import emojis
 import json
 import pytz
 
+BASE_DIR = Path(__file__).resolve().parent
+TEMPLATE_DIR = BASE_DIR / "templates"
 chatrouter = APIRouter(tags=['chat'])
-templates = Jinja2Templates(directory='./chat/templates')
+templates = Jinja2Templates(directory=TEMPLATE_DIR)
+templates.env.globals['get_flashed_messages'] = get_flashed_messages
 
 # @chatrouter.before_request
 # @login_required
@@ -22,12 +31,11 @@ templates = Jinja2Templates(directory='./chat/templates')
 #     session['current_path'] = request.path
 #     pass 
 
-@chatrouter.route('/home')
-def home():
+@chatrouter.api_route('/home', methods=['GET', 'POST'])
+async def home(request: Request, user: User = Depends(get_current_user)):
     # session.clear()
-    print(session.get('recent_emojis'))
+    print(request.session.get('recent_emojis'))
     
-    user = current_user
     messages = Message.query.filter(
         or_(Message.sender_id == user.id, Message.receiver_id == user.id)
     )
@@ -44,41 +52,40 @@ def home():
 
     return render_template('chat/index.html', user=current_user, all_users=all_users, inbox_list=sorted_inbox_list, messages=messages)
 
-@chatrouter.route('/show-direct-messages', methods=['POST'])
-def show_dms():
-    phone = request.form.get('phone')
-    user = current_user
+@chatrouter.api_route('/show-direct-messages', methods=['POST'])
+async def show_dms(request: Request, response_class = HTMLResponse, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    form_data = await request.form()
+    phone = form_data.get('phone')
     friend = User.query.filter_by(phone=phone).first()
     if not friend:
-        return jsonify(error= 'User not found') 
+        return {'error':  'User not found'} 
 
-    recent_emojis = session.get('recent_emojis')
+    recent_emojis = request.session.get('recent_emojis')
     messages = Message.query.filter(
         or_(Message.sender_id == user.id, Message.receiver_id == user.id), 
         or_(Message.sender_id == friend.id, Message.receiver_id == friend.id)
     )
     messages.filter_by(sender_id=friend.id).update(dict(is_read=True))
-    db.session.commit()
+    db.commit()
     messages = messages.order_by(Message.created_at)
     response = dict()
     response['success'] = True
-    response['html_data'] = render_template('chat/dm-page.html', messages=messages, friend= friend, recent_emojis= recent_emojis, user=user)
+    response['html_data'] = templates.TemplateResponse('chat/dm-page.html', {'request': request, 'messages':messages, 'friend':friend, 'recent_emojis': recent_emojis, 'user': user})
     
-    return jsonify(response)
+    return response
 
 @chatrouter.route('/send-message', methods=['POST'])
-def send_message():
-    user = current_user
-    data = request.form
+async def send_message(request: Request, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    data = await request.form()
     message = data.get('message')
     friend = User.query.filter_by(phone=data.get('phone')).first()
     if not friend:
-        return jsonify(error= 'User not found') 
+        return {'error': 'User not found'} 
     if len(message) < 1:
-        return jsonify(error= "You didn't type anything")
+        return {'error': "You didn't type anything"}
 
     # Solve recent emojis
-    recent_emojis = session.get('recent_emojis')
+    recent_emojis = request.session.get('recent_emojis')
     em = []
     for i in message:
         if i in emojis:
@@ -94,16 +101,16 @@ def send_message():
             if len(updated_emojis) > 50:
                 n = len(updated_emojis) - 50
                 del updated_emojis[-n:]
-            session['recent_emojis'] = updated_emojis
+            request.session['recent_emojis'] = updated_emojis
         else:
             updated_emojis = em
             if len(updated_emojis) > 50:
                 n = len(updated_emojis) - 50
                 del updated_emojis[-n:]
-            session['recent_emojis'] = updated_emojis
+            request.session['recent_emojis'] = updated_emojis
 
     message_object = Message(sender_id=user.id, receiver_id=friend.id, text=message)
-    db.session.add(message_object)
-    db.session.commit()
+    db.add(message_object)
+    db.commit()
     time = message_object.created_at.astimezone(pytz.timezone(user.tzname))
-    return jsonify(success=True, message= message, time= time.strftime('%I:%M %p'))
+    return {'success': True, 'message': message, 'time': time.strftime('%I:%M %p')}

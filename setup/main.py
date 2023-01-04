@@ -7,6 +7,7 @@ from sqladmin import Admin
 
 from . database import engine, SQLALCHAMY_DATABASE_URL, Base
 from . settings import *
+from . extensions import *
 
 from apps.accounts.views import accountsrouter
 from apps.chat.views import chatrouter

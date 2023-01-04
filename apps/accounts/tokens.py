@@ -59,3 +59,27 @@ class Token:
         user.current_password_jwt['used'] = True
         db.commit()
         return user
+
+    def get_access_token(payload):
+        return jwt.encode(
+            {"exp": datetime.utcnow() + timedelta(minutes=30), **payload},
+            SECRET_KEY,
+            algorithm="HS256"
+        )
+
+    def decodeJWT(db, token):
+        if not token:
+            return None
+
+        try:
+            decoded = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
+        except jwt.ExpiredSignatureError:
+            return None
+        except jwt.InvalidSignatureError:
+            return None
+
+        if decoded:
+            user = db.query(User).filter_by(id=decoded["user_id"]).first()
+            if user:
+                return user
+            return None
