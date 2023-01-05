@@ -5,6 +5,7 @@
 	<div class="main-agileinfo">
 		<div class="agileits-top">
 			<form method="post" class="register-form">
+				{{ form.csrf_token }}
 				{% for field in form if not field.name == 'terms_agreement' %}
 					{{field}}
 					{% for error in field.errors  %}

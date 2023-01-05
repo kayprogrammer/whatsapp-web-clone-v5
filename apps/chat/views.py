@@ -1,5 +1,5 @@
 from fastapi import FastAPI, Request, APIRouter
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from sqlalchemy.orm import Session
@@ -8,7 +8,9 @@ from apps.accounts.models import User
 from apps.accounts.views import get_current_user
 from fastapi import Depends
 from fastapi.templating import Jinja2Templates
-from  pathlib import Path
+from fastapi_csrf_protect import CsrfProtect
+
+from pathlib import Path
 
 from setup.extensions import get_flashed_messages, flash
 from setup.database import get_db
@@ -32,10 +34,7 @@ templates.env.globals['get_flashed_messages'] = get_flashed_messages
 #     pass 
 
 @chatrouter.api_route('/home', methods=['GET', 'POST'])
-async def home(request: Request, user: User = Depends(get_current_user)):
-    # session.clear()
-    print(request.session.get('recent_emojis'))
-    
+async def home(request: Request, user: User = Depends(get_current_user), csrf_protect:CsrfProtect = Depends()):    
     messages = Message.query.filter(
         or_(Message.sender_id == user.id, Message.receiver_id == user.id)
     )
@@ -50,10 +49,10 @@ async def home(request: Request, user: User = Depends(get_current_user)):
     
     all_users = User.query.filter(User.is_email_verified==True, User.is_phone_verified==True, User.is_active==True, User.id != user.id).order_by('name')
 
-    return render_template('chat/index.html', user=current_user, all_users=all_users, inbox_list=sorted_inbox_list, messages=messages)
+    return templates.TemplateResponse('chat/index.html', {'request': request, 'user':user, 'all_users':all_users, 'inbox_list': sorted_inbox_list, 'messages': messages, 'csrf_token': csrf_protect.generate_csrf()})
 
 @chatrouter.api_route('/show-direct-messages', methods=['POST'])
-async def show_dms(request: Request, response_class = HTMLResponse, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+async def show_dms(request: Request, response_class = HTMLResponse, user: User = Depends(get_current_user), db: Session = Depends(get_db), csrf_protect:CsrfProtect = Depends()):
     form_data = await request.form()
     phone = form_data.get('phone')
     friend = User.query.filter_by(phone=phone).first()
@@ -69,13 +68,14 @@ async def show_dms(request: Request, response_class = HTMLResponse, user: User =
     db.commit()
     messages = messages.order_by(Message.created_at)
     response = dict()
-    response['success'] = True
-    response['html_data'] = templates.TemplateResponse('chat/dm-page.html', {'request': request, 'messages':messages, 'friend':friend, 'recent_emojis': recent_emojis, 'user': user})
     
+    response['success'] = True
+    response['html_data'] = templates.TemplateResponse('chat/dm-page.html', {'request': request, 'messages':messages, 'friend':friend, 'recent_emojis': recent_emojis, 'user': user, 'csrf_token': csrf_protect.generate_csrf()})
+    print(response)    
     return response
 
 @chatrouter.route('/send-message', methods=['POST'])
-async def send_message(request: Request, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+async def send_message(request: Request, user: User = Depends(get_current_user), db: Session = Depends(get_db), csrf_protect:CsrfProtect = Depends()):
     data = await request.form()
     message = data.get('message')
     friend = User.query.filter_by(phone=data.get('phone')).first()

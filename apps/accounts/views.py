@@ -1,4 +1,4 @@
-from fastapi import Request, APIRouter, Form
+from fastapi import Request, APIRouter, Form, HTTPException
 from fastapi.security import OAuth2PasswordBearer
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
@@ -14,6 +14,8 @@ from setup.extensions import get_flashed_messages, flash
 from sqlalchemy.orm import Session
 from . senders import Util
 from . tokens import Token
+from . utils import OAuth2PasswordBearerWithCookie
+from . exceptions import NotAuthenticatedException
 from pathlib import Path
 import pytz
 
@@ -24,11 +26,11 @@ templates = Jinja2Templates(directory=TEMPLATE_DIR)
 templates.env.globals['get_flashed_messages'] = get_flashed_messages
 
 # Get current user
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl = "/login", scheme_name="JWT")
+oauth2_scheme = OAuth2PasswordBearerWithCookie(tokenUrl = "/accounts/login")
 async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
     user = Token.decodeJWT(db, token) # check access token validity. returns user object or None
     if not user:
-        raise HTTPException(status_code = 401, detail='Signature invalid or expired')
+        raise NotAuthenticatedException(status_code = 401, detail='Signature invalid or expired')
 
     return user
 

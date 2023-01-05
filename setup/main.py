@@ -1,15 +1,20 @@
 from typing import Union
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware import Middleware
+from fastapi.responses import RedirectResponse
+from fastapi_csrf_protect import CsrfProtect
+from fastapi_csrf_protect.exceptions import CsrfProtectError
 from starlette.middleware.sessions import SessionMiddleware
 from sqladmin import Admin
+from pydantic import BaseModel
 
 from . database import engine, SQLALCHAMY_DATABASE_URL, Base
 from . settings import *
 from . extensions import *
 
 from apps.accounts.views import accountsrouter
+from apps.accounts.exceptions import NotAuthenticatedException
 from apps.chat.views import chatrouter
 from apps.status.views import statusrouter
 
@@ -31,3 +36,24 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 
 # Initialize admin models
 from apps.accounts import admin
+
+@app.exception_handler(NotAuthenticatedException)
+def auth_exception_handler(request: Request, exc: NotAuthenticatedException):
+    """
+    Redirect the user to the login page if not logged in
+    """
+    response = RedirectResponse(request.url_for('login'))
+    response.delete_cookie("access_token")
+    return response
+
+@app.exception_handler(CsrfProtectError)
+def csrf_protect_exception_handler(request: Request, exc: CsrfProtectError):
+    flash(request, exc.message, {"heading": "Invalid CSRF", "tag": "error"})
+    return RedirectResponse(request.url_for('home'))
+
+class CsrfSettings(BaseModel):
+  secret_key:str = SECRET_KEY
+
+@CsrfProtect.load_config
+def get_csrf_config():
+  return CsrfSettings()
