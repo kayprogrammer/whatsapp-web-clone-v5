@@ -36,8 +36,8 @@ email_conf = ConnectionConfig(
     MAIL_PORT=config('MAIL_PORT'),
     MAIL_SERVER=config('MAIL_SERVER'),
     MAIL_FROM_NAME=config('SITE_NAME'),
-    MAIL_STARTTLS=True,
-    MAIL_SSL_TLS=False,
+    MAIL_STARTTLS=False,
+    MAIL_SSL_TLS=True,
     USE_CREDENTIALS=True,
     TEMPLATE_FOLDER='./apps/accounts/templates/accounts'
 )

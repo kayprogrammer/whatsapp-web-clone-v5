@@ -123,7 +123,7 @@ class OtpVerificationForm(Form):
         user.is_phone_verified = True
         self.db.commit()
         if user.is_email_verified:
-            Util.send_welcome_email(request, user)
+            Util.send_welcome_email(self.request, user)
         return otp
 
 class PasswordResetRequestForm(Form):
