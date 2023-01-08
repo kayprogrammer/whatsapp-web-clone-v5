@@ -94,12 +94,12 @@ class User(UserManager, TimeStampedUUIDModel):
     def __repr__(self):
         return self.name
 
-    @hybrid_property
-    def tzname(self):
-        tz_name = Timezone.query.filter_by(pkid=self.tz_id).first()
-        if tz_name:
-            return tz_name.name
-        return 'UTC'
+    # @hybrid_property
+    # def tzname(self):
+    #     tz_name = Timezone.query.filter_by(pkid=self.tz_id).first()
+    #     if tz_name:
+    #         return tz_name.name
+    #     return 'UTC'
 
     def check_password(self, value):
         """Check password."""
@@ -116,13 +116,13 @@ class BlockedContact(TimeStampedUUIDModel):
     blocker_id = Column(UUID(as_uuid=True), ForeignKey('users.id'))
     blockee_id = Column(UUID(as_uuid=True), ForeignKey('users.id'))
 
-    @hybrid_property
-    def blocker(self):
-        return User.query.filter_by(id=self.blocker_id).first()
+    # @hybrid_property
+    # def blocker(self):
+    #     return User.query.filter_by(id=self.blocker_id).first()
 
-    @hybrid_property
-    def blockee(self):
-        return User.query.filter_by(id=self.blockee_id).first()
+    # @hybrid_property
+    # def blockee(self):
+    #     return User.query.filter_by(id=self.blockee_id).first()
 
     def __repr__(self):
         try:

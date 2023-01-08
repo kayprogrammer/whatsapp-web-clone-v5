@@ -1,4 +1,4 @@
-from fastapi import Request, APIRouter, Form, HTTPException
+from fastapi import Request, APIRouter, Form, HTTPException, BackgroundTasks
 from fastapi.security import OAuth2PasswordBearer
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
@@ -11,6 +11,7 @@ from fastapi.templating import Jinja2Templates
 from setup.database import get_db
 from setup.extensions import get_flashed_messages, flash
 
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 from . senders import Util
 from . tokens import Token
@@ -35,10 +36,10 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = De
     return user
 
 @accountsrouter.api_route('/register/', methods=['GET', 'POST'])
-async def register(request: Request, response_class = HTMLResponse, db: Session = Depends(get_db)):
+async def register(backgroundtasks: BackgroundTasks, request: Request, response_class = HTMLResponse, db: Session = Depends(get_db)):
     form_data = await request.form()
-    form = RegisterForm(form_data)
-    timezones = Timezone.query.all()
+    form = RegisterForm(form_data, db=db)
+    timezones = db.query(Timezone).all()
     timezones_list=[(t.name, t.name) for t in timezones]
     form.tz.choices = timezones_list
 
@@ -51,18 +52,18 @@ async def register(request: Request, response_class = HTMLResponse, db: Session 
             password=form.password.data,
             terms_agreement=form.terms_agreement.data,
         )
-        await Util.send_verification_email(request, user, db)
+        Util.send_verification_email(backgroundtasks, request, user, db)
         return templates.TemplateResponse('accounts/email-activation-request.html', {'request': request, 'detail':'sent', 'email':user.email})
     print(form.errors)
     return templates.TemplateResponse('accounts/register.html', {'request': request, 'form': form})
 
 @accountsrouter.api_route('/activate-user/{token}/{user_id}/', methods=['GET'])
-async def activate_user(request: Request, token, user_id, response_class = HTMLResponse, db: Session = Depends(get_db)):
-    user_obj = User.query.filter_by(id=user_id).first()
+def activate_user(backgroundtasks: BackgroundTasks, request: Request, token, user_id, response_class = HTMLResponse, db: Session = Depends(get_db)):
+    user_obj = db.query(User).filter_by(id=user_id).first()
     if not user_obj:
         flash(request, "You entered an invalid link!", {"heading": "Invalid", "tag": "error"})
         return RedirectResponse(request.url_for("login"))
-    user = Token.verify_activation_token(token)
+    user = Token.verify_activation_token(token, db)
     if not user:
         return templates.TemplateResponse('accounts/email-activation-failed.html', {'request': request, 'email':user_obj.email})
     if user.id != user_obj.id:
@@ -71,7 +72,9 @@ async def activate_user(request: Request, token, user_id, response_class = HTMLR
 
     user.current_activation_jwt['used'] = True
     user.is_email_verified = True
+    db.add(user)
     db.commit()
+    db.refresh(user)
 
     if not user.is_phone_verified:
         Util.send_sms_otp(user, db)
@@ -80,11 +83,11 @@ async def activate_user(request: Request, token, user_id, response_class = HTMLR
         return RedirectResponse(request.url_for('verify_otp'))
 
     flash(request, "Activation successful!.", {"heading": "Done", "tag": "success"})
-    await Util.send_welcome_email(request, user)
+    Util.send_welcome_email(backgroundtasks, request, user)
     return RedirectResponse(request.url_for("login"))
 
 @accountsrouter.api_route('/resend-activation-email/', methods=['GET'])
-async def resend_activation_email(request: Request, response_class = HTMLResponse, db: Session = Depends(get_db)):
+def resend_activation_email(backgroundtasks: BackgroundTasks, request: Request, response_class = HTMLResponse, db: Session = Depends(get_db)):
     email = request.cookies.get('activation_email')
     user_obj = User.query.filter_by(email=email).first()
     if not user_obj:
@@ -94,29 +97,29 @@ async def resend_activation_email(request: Request, response_class = HTMLRespons
         flash(request, "Your email address has already been verified!.", {"heading": "Verified", "tag": "info"})
         return RedirectResponse(request.url_for("login"))
 
-    await Util.send_verification_email(request, user_obj, db)
+    Util.send_verification_email(backgroundtasks, request, user_obj, db)
     return templates.TemplateResponse('accounts/email-activation-request.html', {'request': request, 'detail':'resent', 'email':email})
 
 @accountsrouter.api_route('/verify-otp', methods=['GET', 'POST'])
-async def verify_otp(request: Request, response_class = HTMLResponse, db: Session = Depends(get_db)):
+async def verify_otp(background_tasks: BackgroundTasks, request: Request, response_class = HTMLResponse, db: Session = Depends(get_db)):
     form_data = await request.form()
     phone = request.session.get('verification_phone')
     if not phone:
         flash(request, "Back to login!.", {"heading": "Error!", "tag": "error"})
         return RedirectResponse(request.url_for('login'))
-    form = OtpVerificationForm(form_data, request=request, db=db)
+    form = OtpVerificationForm(form_data, request=request, db=db, background_tasks=background_tasks)
     if request.method == 'POST' and form.validate():
         flash(request, "You can login now.", {"heading": "Verification complete!", "tag": "success"})
         return RedirectResponse(request.url_for('login'))
     return templates.TemplateResponse('accounts/otp-verification.html', {'request':request, 'form': form})
 
 @accountsrouter.api_route('/resend-otp', methods=['GET'])
-async def resend_otp(request: Request, db: Session = Depends(get_db)):
+def resend_otp(request: Request, db: Session = Depends(get_db)):
     phone = request.session.get('verification_phone')
     if not phone:
         flash(request, "Something went wrong.", {"heading": "Error!", "tag": "info"})
         return RedirectResponse(request.url_for('login'))
-    user = User.query.filter_by(phone=phone).first()
+    user = db.query(User).filter_by(phone=phone).first()
     if not user:
         flash(request, "Invalid user.", {"heading": "Error!", "tag": "error"})
         return RedirectResponse(request.url_for('login'))
@@ -130,13 +133,13 @@ async def resend_otp(request: Request, db: Session = Depends(get_db)):
 
 
 @accountsrouter.api_route('/login', methods=['GET', 'POST'])
-async def login(request: Request, response_class = HTMLResponse, db: Session = Depends(get_db)):
+async def login(backgroundtasks: BackgroundTasks, request: Request, response_class = HTMLResponse, db: Session = Depends(get_db)):
     request.session['password_reset_email'] = None
     form_data = await request.form()
 
     form = LoginForm(form_data)
     if request.method == 'POST' and form.validate():
-        user = User.query.filter_by(email=form.email_or_phone.data).first() or User.query.filter_by(phone=form.email_or_phone.data).first()
+        user = db.query(User).filter(or_(User.email==form.email_or_phone.data, User.phone==form.email_or_phone.data)).first()
         if not user:
             flash(request, "Invalid credentials.", {"heading": "Error!", "tag": "error"})
             return templates.TemplateResponse('accounts/login.html', {'request': request, 'form':form})
@@ -144,9 +147,9 @@ async def login(request: Request, response_class = HTMLResponse, db: Session = D
         if password_check == False:
             flash(request, "Invalid credentials.", {"heading": "Error!", "tag": "error"})
             return templates.TemplateResponse('accounts/login.html', {'request': request, 'form':form}) 
-        # print()
+        print(user.is_phone_verified)
         if not user.is_email_verified:
-            await Util.send_verification_email(request, user, db)
+            Util.send_verification_email(backgroundtasks, request, user, db)
             return templates.TemplateResponse('accounts/email-activation-request.html', {'request': request, 'detail': 'request', 'email': user.email})
 
         if not user.is_phone_verified:
@@ -166,23 +169,23 @@ def logout(request: Request, user: User = Depends(get_current_user)):
     return response
 
 @accountsrouter.api_route('/request-password-reset', methods=['GET', 'POST'])
-async def password_reset_request(request: Request, ):
+def password_reset_request(backgroundtasks: BackgroundTasks, request: Request, db: Session = Depends(get_db)):
     detail = 'first_view'
     form = PasswordResetRequestForm(request.form)
     if form.validate_on_submit():
-        user = User.query.filter_by(email=form.email.data).first()
+        user = db.query(User).filter_by(email=form.email.data).first()
         if user:
-            await Util.send_password_reset_email(request, user, db)
+            Util.send_password_reset_email(backgroundtasks, request, user, db)
             request.session['password_reset_email'] = user.email
             detail = 'second_view'
     return templates.TemplateResponse('accounts/password-reset-request.html', detail=detail, form=form)
 
 @accountsrouter.api_route('/verify-password-reset-token/<token>/<user_id>', methods=['GET', 'POST'])
-def verify_password_reset_token(request: Request, token, user_id):
+def verify_password_reset_token(request: Request, token, user_id, db: Session = Depends(get_db)):
     detail = 'invalid_token'
     form = None
     try:
-        user_obj = User.query.filter_by(id=user_id).first()
+        user_obj = db.query(User).filter_by(id=user_id).first()
     except:
         flash(request, "You entered an invalid link.", {"heading": "Error!", "tag": "error"})
         return RedirectResponse(request.url_for("login"))
@@ -197,9 +200,9 @@ def verify_password_reset_token(request: Request, token, user_id):
     return templates.TemplateResponse('accounts/password-reset.html', detail=detail, form=form, email=user_obj.email)
 
 @accountsrouter.api_route('/reset-password', methods=['GET', 'POST'])
-def reset_password(request: Request, ):
+def reset_password(request: Request, db: Session = Depends(get_db)):
     email=request.session.get('password_reset_email')
-    user = User.query.filter_by(email=email).first()
+    user = db.query(User).filter_by(email=email).first()
     if not user:
         flash(request, "Not allowed.", {"heading": "Error!", "tag": "error"})
         return RedirectResponse(request.url_for('login'))
@@ -208,19 +211,21 @@ def reset_password(request: Request, ):
     if form.validate_on_submit():
         if user:
             user.password = form.newpassword.data
+            db.add(user)
             db.commit()
+            db.refresh(user)
             flash(request, "Your password has been reset.", {"heading": "Success!", "tag": "success"})
             request.session['password_reset_email'] = None
             return RedirectResponse(request.url_for("login"))
     return templates.TemplateResponse('accounts/password-reset.html', detail=detail, form=form, email=email)
 
 @accountsrouter.api_route('/resend-password-token/<email>', methods=['GET'])
-async def resend_password_token(request: Request, email):
+async def resend_password_token(backgroundtasks: BackgroundTasks, request: Request, email, db: Session = Depends(get_db)):
     detail = 'third_view'
-    user = User.query.filter_by(email=email).first()
+    user = db.query(User).filter_by(email=email).first()
     if not user:
         flash(request, "Something went wrong.", {"heading": "Error!", "tag": "error"})
         return RedirectResponse(request.url_for("login"))
     
-    await Util.send_password_reset_email(request, user, db)
+    await Util.send_password_reset_email(backgroundtasks, request, user, db)
     return templates.TemplateResponse('accounts/password-reset-request.html', detail=detail, form=None)

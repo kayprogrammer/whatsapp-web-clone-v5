@@ -23,7 +23,7 @@ class UserManager(object):
         validate_phone(phone)
         validate_password(password)
             
-        timezone = Timezone.query.filter_by(name=tz).first()
+        timezone = db.query(Timezone).filter_by(name=tz).first()
         if not timezone:
             raise ValueError('Invalid Timezone')
 
@@ -56,7 +56,7 @@ class UserManager(object):
         validate_phone(phone)
         validate_password(password)
             
-        timezone = Timezone.query.filter_by(name=tz).first()
+        timezone = db.query(Timezone).filter_by(name=tz).first()
         if not timezone:
             raise ValueError('Invalid Timezone')
 
@@ -75,7 +75,7 @@ class OtpManager(object):
     @classmethod
     def get_or_create(cls, db: Session, **kwargs):
         print(kwargs)
-        instance = cls.query.filter_by(**kwargs).first()
+        instance = db.query(cls).filter_by(**kwargs).first()
 
         if instance:
             return instance
@@ -83,4 +83,5 @@ class OtpManager(object):
             instance = cls(**kwargs)
             db.add(instance)
             db.commit()
+            db.refresh(instance)
             return instance

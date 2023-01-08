@@ -1,5 +1,5 @@
 from fastapi import FastAPI, Request, APIRouter
-from fastapi.responses import HTMLResponse, Response
+from fastapi.responses import HTMLResponse, Response, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from sqlalchemy.orm import Session
@@ -34,8 +34,8 @@ templates.env.globals['get_flashed_messages'] = get_flashed_messages
 #     pass 
 
 @chatrouter.api_route('/home', methods=['GET', 'POST'])
-async def home(request: Request, user: User = Depends(get_current_user), csrf_protect:CsrfProtect = Depends()):    
-    messages = Message.query.filter(
+async def home(request: Request, user: User = Depends(get_current_user), csrf_protect:CsrfProtect = Depends(), db: Session = Depends(get_db)):    
+    messages = db.query(Message).filter(
         or_(Message.sender_id == user.id, Message.receiver_id == user.id)
     )
     other = case(
@@ -47,7 +47,7 @@ async def home(request: Request, user: User = Depends(get_current_user), csrf_pr
     ).distinct(other)
     sorted_inbox_list = sorted(inbox_list, key=lambda x: x.created_at, reverse=True)
     
-    all_users = User.query.filter(User.is_email_verified==True, User.is_phone_verified==True, User.is_active==True, User.id != user.id).order_by('name')
+    all_users = db.query(User).filter(User.is_email_verified==True, User.is_phone_verified==True, User.is_active==True, User.id != user.id).order_by('name')
 
     return templates.TemplateResponse('chat/index.html', {'request': request, 'user':user, 'all_users':all_users, 'inbox_list': sorted_inbox_list, 'messages': messages, 'csrf_token': csrf_protect.generate_csrf()})
 
@@ -57,12 +57,12 @@ async def show_dms(request: Request, response_class = HTMLResponse, user: User =
     # csrf_token = csrf_protect.get_csrf_from_headers(request.headers)
     # csrf_protect.validate_csrf(csrf_token)
     phone = form_data.get('phone')
-    friend = User.query.filter_by(phone=phone).first()
+    friend = db.query(User).filter_by(phone=phone).first()
     if not friend:
         return {'error':  'User not found'} 
 
     recent_emojis = request.session.get('recent_emojis')
-    messages = Message.query.filter(
+    messages = db.query(Message).filter(
         or_(Message.sender_id == user.id, Message.receiver_id == user.id), 
         or_(Message.sender_id == friend.id, Message.receiver_id == friend.id)
     )
@@ -72,9 +72,9 @@ async def show_dms(request: Request, response_class = HTMLResponse, user: User =
     response = dict()
     
     response['success'] = True
-    response['html_data'] = templates.TemplateResponse('chat/dm-page.html', {'request': request, 'messages':messages, 'friend':friend, 'recent_emojis': recent_emojis, 'user': user, 'csrf_token': csrf_protect.generate_csrf()})
-    print(response)    
-    return response
+    context = {'request': request, 'messages':messages, 'friend':friend, 'recent_emojis': recent_emojis, 'user': user, 'csrf_token': csrf_protect.generate_csrf()}
+    response['html_data'] = templates.get_template('chat/dm-page.html').render(context)
+    return response 
 
 @chatrouter.api_route('/send-message', methods=['POST'])
 async def send_message(request: Request, user: User = Depends(get_current_user), db: Session = Depends(get_db), csrf_protect:CsrfProtect = Depends()):
@@ -82,7 +82,7 @@ async def send_message(request: Request, user: User = Depends(get_current_user),
     # csrf_token = csrf_protect.get_csrf_from_headers(request.headers)
     # csrf_protect.validate_csrf(csrf_token)
     message = data.get('message')
-    friend = User.query.filter_by(phone=data.get('phone')).first()
+    friend = db.query(User).filter_by(phone=data.get('phone')).first()
     if not friend:
         return {'error': 'User not found'} 
     if len(message) < 1:
@@ -116,5 +116,6 @@ async def send_message(request: Request, user: User = Depends(get_current_user),
     message_object = Message(sender_id=user.id, receiver_id=friend.id, text=message)
     db.add(message_object)
     db.commit()
+    db.refresh(message_object)
     time = message_object.created_at.astimezone(pytz.timezone(user.tzname))
     return {'success': True, 'message': message, 'time': time.strftime('%I:%M %p')}

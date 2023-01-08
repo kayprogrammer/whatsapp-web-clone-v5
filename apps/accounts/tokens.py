@@ -7,15 +7,17 @@ class Token:
     def get_activation_token(user, db):
         token = jwt.encode({'activate_user': str(user.id), 'exp':datetime.utcnow() + timedelta(seconds=900)}, key=SECRET_KEY, algorithm="HS256") 
         user.current_activation_jwt = {'token': token, 'used': False }
+        db.add(user)
         db.commit()
+        db.refresh(user)
         return token
 
-    def verify_activation_token(token):
+    def verify_activation_token(token, db):
         try:
             user_id = jwt.decode(token,
               key=SECRET_KEY, algorithms=["HS256"])['activate_user']
 
-            user = User.query.filter_by(id=user_id).first()
+            user = db.query(User).filter_by(id=user_id).first()
         except Exception as e:
             return None
         
@@ -34,8 +36,9 @@ class Token:
                            'exp': datetime.utcnow() + timedelta(seconds=900)},
                            key=SECRET_KEY, algorithm="HS256")
         user.current_password_jwt = {'token': token, 'used': False }
-
+        db.add(user)
         db.commit()
+        db.refresh(user)
         return token
 
     def verify_reset_token(token, db):
@@ -43,7 +46,7 @@ class Token:
             user_id = jwt.decode(token,
               key=SECRET_KEY, algorithms=["HS256"])['reset_password']
 
-            user = User.query.filter_by(id=user_id).first()
+            user = db.query(User).filter_by(id=user_id).first()
         except Exception as e:
             return None
 
@@ -57,7 +60,9 @@ class Token:
             return None
 
         user.current_password_jwt['used'] = True
+        db.add(user)
         db.commit()
+        db.refresh(user)
         return user
 
     def get_access_token(payload):

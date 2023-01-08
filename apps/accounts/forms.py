@@ -17,11 +17,11 @@ def validate_password(form, field):
         raise ValidationError('Password must contain at least 8 characters')
 
 def validate_phone(form, field):
-    user = User.query.filter_by(phone=field.data).first()
+    user = form.db.query(User).filter_by(phone=field.data).first()
     if user:
         raise ValidationError("Phone number already registered")
 def validate_email(form, field):
-    user = User.query.filter_by(email=field.data).first()
+    user = form.db.query(User).filter_by(email=field.data).first()
     if user:
         raise ValidationError("Email address already registered")
 
@@ -79,6 +79,7 @@ class RegisterForm(Form):
         """Create instance."""
         super(RegisterForm, self).__init__(*args, **kwargs)
         self.user = None
+        self.db = kwargs['db']
 
 class LoginForm(Form):
     email_or_phone = StringField(
@@ -103,6 +104,7 @@ class OtpVerificationForm(Form):
         super(OtpVerificationForm, self).__init__(*args, **kwargs)
         self.request = kwargs['request']
         self.db = kwargs['db']
+        self.background_tasks = kwargs['background_tasks']
 
     def validate(self):
         initial_validation = super(OtpVerificationForm, self).validate()
@@ -110,9 +112,10 @@ class OtpVerificationForm(Form):
             return False
         phone = self.request.session.get('verification_phone')
         otp = self.otp.data
-        user = User.query.filter_by(phone=phone).first()
+        db = self.db
+        user = db.query(User).filter_by(phone=phone).first()
 
-        otp_object = Otp.query.filter_by(user_id=user.id, value=otp).first()
+        otp_object = db.query(Otp).filter_by(user_id=user.id, value=otp).first()
         if not otp_object:
             self.otp.errors.append("Invalid Otp")
             return False
@@ -121,9 +124,11 @@ class OtpVerificationForm(Form):
             self.otp.errors.append('Expired Otp')
             return False
         user.is_phone_verified = True
-        self.db.commit()
+        db.add(user)
+        db.commit()
+        db.refresh(user)
         if user.is_email_verified:
-            Util.send_welcome_email(self.request, user)
+            Util.send_welcome_email(self.background_tasks, self.request, user)
         return otp
 
 class PasswordResetRequestForm(Form):
@@ -140,26 +145,3 @@ class PasswordResetForm(Form):
     def __init__(self, *args, **kwargs):
         super(PasswordResetForm, self).__init__(*args, **kwargs)
         self.user = None
-
-# from fastapi import Form, File, UploadFile
-# from pydantic import BaseModel
-
-
-# # https://stackoverflow.com/a/60670614
-# class AwesomeForm(BaseModel):
-#     username: str
-#     password: str
-#     file: UploadFile
-
-#     @classmethod
-#     def as_form(
-#         cls,
-#         name: str = Form(...),
-#         password: str = Form(...),
-#         file: UploadFile = File(...)
-#     ):
-#         return cls(
-#             username=username,
-#             password=password,
-#             file=file
-#         )

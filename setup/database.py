@@ -8,15 +8,12 @@ SQLALCHAMY_DATABASE_URL = f"postgresql://{DATABASES['USER']}:{DATABASES['PASSWOR
 engine = create_engine(SQLALCHAMY_DATABASE_URL)
 
 SessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False)
-session = scoped_session(SessionLocal)
+
 Base = declarative_base()
 
-Base.query = session.query_property()
-
 def get_db():
-    db = session()
+    db = SessionLocal()
     try:
         yield db
     finally:
         db.close()
-
