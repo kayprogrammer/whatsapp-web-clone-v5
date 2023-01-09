@@ -60,3 +60,7 @@ def csrf_protect_exception_handler(request: Request, exc: CsrfProtectError):
       content={ 'detail':  exc.message
     }
   )
+
+@app.get('/')
+def index(request: Request):
+  return RedirectResponse(request.url_for('home'))

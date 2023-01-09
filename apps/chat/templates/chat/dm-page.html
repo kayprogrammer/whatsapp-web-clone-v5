@@ -634,7 +634,6 @@
         $(".hidden").hide();
         var phone = $('#frnd-phone').val()
         var message = $(".send-message")
-        // console.log(/\p{Emoji}/u.test(message.val()))
         $.ajax({
             url: "/chat/send-message",
             method: "POST",

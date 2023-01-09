@@ -26,15 +26,8 @@ chatrouter = APIRouter(tags=['chat'])
 templates = Jinja2Templates(directory=TEMPLATE_DIR)
 templates.env.globals['get_flashed_messages'] = get_flashed_messages
 
-# @chatrouter.before_request
-# @login_required
-# def before_request():
-#     """ Execute before all of the chat endpoints. """
-#     session['current_path'] = request.path
-#     pass 
-
 @chatrouter.api_route('/home', methods=['GET', 'POST'])
-async def home(request: Request, user: User = Depends(get_current_user), csrf_protect:CsrfProtect = Depends(), db: Session = Depends(get_db)):    
+async def home(request: Request, user: User = Depends(get_current_user), csrf_protect:CsrfProtect = Depends(), db: Session = Depends(get_db)):
     messages = db.query(Message).filter(
         or_(Message.sender_id == user.id, Message.receiver_id == user.id)
     )

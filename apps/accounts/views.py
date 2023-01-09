@@ -18,6 +18,7 @@ from . tokens import Token
 from . utils import OAuth2PasswordBearerWithCookie
 from . exceptions import NotAuthenticatedException
 from . hashers import Hasher
+from . decorators import logout_required
 from pathlib import Path
 import pytz
 
@@ -37,6 +38,7 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = De
     return user
 
 @accountsrouter.api_route('/register/', methods=['GET', 'POST'])
+@logout_required
 async def register(backgroundtasks: BackgroundTasks, request: Request, response_class = HTMLResponse, db: Session = Depends(get_db)):
     form_data = await request.form()
     form = RegisterForm(form_data, db=db)
@@ -58,6 +60,7 @@ async def register(backgroundtasks: BackgroundTasks, request: Request, response_
     return templates.TemplateResponse('accounts/register.html', {'request': request, 'form': form})
 
 @accountsrouter.api_route('/activate-user/{token}/{user_id}/', methods=['GET'])
+@logout_required
 def activate_user(backgroundtasks: BackgroundTasks, request: Request, token, user_id, response_class = HTMLResponse, db: Session = Depends(get_db)):
     user_obj = db.query(User).filter_by(id=user_id).first()
     if not user_obj:
@@ -87,6 +90,7 @@ def activate_user(backgroundtasks: BackgroundTasks, request: Request, token, use
     return RedirectResponse(request.url_for("login"))
 
 @accountsrouter.api_route('/resend-activation-email/', methods=['GET'])
+@logout_required
 def resend_activation_email(backgroundtasks: BackgroundTasks, request: Request, response_class = HTMLResponse, db: Session = Depends(get_db)):
     email = request.cookies.get('activation_email')
     user_obj = User.query.filter_by(email=email).first()
@@ -101,6 +105,7 @@ def resend_activation_email(backgroundtasks: BackgroundTasks, request: Request, 
     return templates.TemplateResponse('accounts/email-activation-request.html', {'request': request, 'detail':'resent', 'email':email})
 
 @accountsrouter.api_route('/verify-otp', methods=['GET', 'POST'])
+@logout_required
 async def verify_otp(background_tasks: BackgroundTasks, request: Request, response_class = HTMLResponse, db: Session = Depends(get_db)):
     form_data = await request.form()
     phone = request.session.get('verification_phone')
@@ -114,6 +119,7 @@ async def verify_otp(background_tasks: BackgroundTasks, request: Request, respon
     return templates.TemplateResponse('accounts/otp-verification.html', {'request':request, 'form': form})
 
 @accountsrouter.api_route('/resend-otp', methods=['GET'])
+@logout_required
 def resend_otp(request: Request, db: Session = Depends(get_db)):
     phone = request.session.get('verification_phone')
     if not phone:
@@ -133,6 +139,7 @@ def resend_otp(request: Request, db: Session = Depends(get_db)):
 
 
 @accountsrouter.api_route('/login', methods=['GET', 'POST'])
+@logout_required
 async def login(backgroundtasks: BackgroundTasks, request: Request, response_class = HTMLResponse, db: Session = Depends(get_db)):
     request.session['password_reset_email'] = None
     form_data = await request.form()
@@ -168,6 +175,7 @@ def logout(request: Request, user: User = Depends(get_current_user)):
     return response
 
 @accountsrouter.api_route('/request-password-reset', methods=['GET', 'POST'])
+@logout_required
 async def password_reset_request(backgroundtasks: BackgroundTasks, request: Request, db: Session = Depends(get_db)):
     detail = 'first_view'
     form_data = await request.form()
@@ -181,6 +189,7 @@ async def password_reset_request(backgroundtasks: BackgroundTasks, request: Requ
     return templates.TemplateResponse('accounts/password-reset-request.html', {'request': request, 'detail': detail, 'form': form})
 
 @accountsrouter.api_route('/verify-password-reset-token/{token}/{user_id}', methods=['GET', 'POST'])
+@logout_required
 def verify_password_reset_token(request: Request, token, user_id, db: Session = Depends(get_db)):
     detail = 'invalid_token'
     form = None
@@ -200,6 +209,7 @@ def verify_password_reset_token(request: Request, token, user_id, db: Session = 
     return templates.TemplateResponse('accounts/password-reset.html', {'request': request, 'detail': detail, 'form': form, 'email': user_obj.email})
 
 @accountsrouter.api_route('/reset-password', methods=['GET', 'POST'])
+@logout_required
 async def reset_password(request: Request, db: Session = Depends(get_db)):
     form_data = await request.form()
     email=request.session.get('password_reset_email')
@@ -221,6 +231,7 @@ async def reset_password(request: Request, db: Session = Depends(get_db)):
     return templates.TemplateResponse('accounts/password-reset.html', {'request': request, 'detail':detail, 'form':form, 'email':email})
 
 @accountsrouter.api_route('/resend-password-token/{email}', methods=['GET'])
+@logout_required
 async def resend_password_token(backgroundtasks: BackgroundTasks, request: Request, email, db: Session = Depends(get_db)):
     detail = 'third_view'
     user = db.query(User).filter_by(email=email).first()

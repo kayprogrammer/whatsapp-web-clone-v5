@@ -1,21 +1,12 @@
-# from functools import wraps
-# from starlette.responses import RedirectResponse
-# from fastapi import Request, Depends
-# from setup.extensions import manager
+from starlette.responses import RedirectResponse
+from fastapi import Request
+import functools
 
-# def login_required(f):
-#     @wraps(f)
-#     def decorated_function(current_user=Depends(manager), *args, **kwargs):
-#         if not current_user.is_authenticated:
-#             return redirect(url_for('accounts_router.login', next=request.url))
-#         return f(*args, **kwargs)
-#     return decorated_function
-
-# def logout_required(f):
-#     @wraps(f)
-#     def decorated_function(current_user=Depends(manager), *args, **kwargs):
-#         if current_user.is_authenticated:
-#             flash("You must logout first!", {"heading": "Not allowed", "tag": "info"})
-#             return redirect(session.get('current_path'))
-#         return f(*args, **kwargs)
-#     return decorated_function
+def logout_required(func):
+    @functools.wraps(func)
+    async def wrapper(request: Request, *args, **kwargs):
+        # Check if access token in header
+        if request.cookies.get("access_token"):
+            return RedirectResponse(request.url_for('home'))
+        return await func(request, *args, **kwargs)
+    return wrapper
