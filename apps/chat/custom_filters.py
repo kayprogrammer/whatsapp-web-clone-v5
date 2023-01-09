@@ -5,8 +5,8 @@ from datetime import datetime
 from fastapi import Request
 from . views import templates
 
-def threadsdatetimefilter(value, format="%I:%M %p"):
-    tzname = current_user.tzname
+def threadsdatetimefilter(value, user, format="%I:%M %p"):
+    tzname = user.tzname
     tz = pytz.timezone(tzname) # timezone you want to convert to from UTC
 
     utc = pytz.timezone('UTC')
@@ -24,8 +24,8 @@ def threadsdatetimefilter(value, format="%I:%M %p"):
 
     return new_dt
 
-def dms_datetimefilter(date):
-    tzname = current_user.tzname
+def dms_datetimefilter(date, user):
+    tzname = user.tzname
     tz = pytz.timezone(tzname) # timezone you want to convert to from UTC
 
     # Get current local time of user and date object in local time

@@ -18,7 +18,8 @@ from . choices import *
 class Timezone(TimeStampedUUIDModel):
     __tablename__ = 'timezone'
     name = Column(String(), nullable=True)
-
+    timezones = relationship('User', foreign_keys="User.tz_id", back_populates='tz', lazy=True)
+    
     def __repr__(self):
         return '<Timezone %r>' % self.name
 
@@ -50,6 +51,7 @@ class User(UserManager, TimeStampedUUIDModel):
     phone = Column(String(20), unique=True)
     password = Column(String())
     tz_id = Column(Integer(), ForeignKey('timezone.pkid', ondelete='SET NULL'))
+    tz = relationship("Timezone", foreign_keys=[tz_id], back_populates="timezones")
     avatar = Column(String(), default="https://res.cloudinary.com/kay-development/image/upload/v1667610903/whatsappclonev1/default/Avatar-10_mvq1cm.jpg")
     theme = Column(ChoiceType(THEME_CHOICES), default="DARK")
     wallpaper = Column(String(), default="https://res.cloudinary.com/kay-development/image/upload/v1670371074/whatsappwebclonev4/bg-chat_lrn705.png")
@@ -84,22 +86,22 @@ class User(UserManager, TimeStampedUUIDModel):
     is_active = Column(Boolean, default=True)
     is_online = Column(DateTime, default=datetime.now)
 
-    blockers = relationship('BlockedContact', foreign_keys="BlockedContact.blocker_id", backref='blocker_user', lazy=True)
-    blockees = relationship('BlockedContact', foreign_keys="BlockedContact.blockee_id", backref='blockee_user', lazy=True)
+    blocker_blockedcontacts = relationship('BlockedContact', foreign_keys="BlockedContact.blocker_id", back_populates='blocker', lazy=True)
+    blockee_blockedcontacts = relationship('BlockedContact', foreign_keys="BlockedContact.blockee_id", back_populates='blockee', lazy=True)
 
-    sender_messages = relationship('Message', foreign_keys="Message.sender_id", backref='sender_user', lazy=True, passive_deletes=True)
-    receiver_messages = relationship('Message', foreign_keys="Message.receiver_id", backref='receiver_user', lazy=True, passive_deletes=True)
+    sender_messages = relationship('Message', foreign_keys="Message.sender_id", back_populates='sender', lazy=True, passive_deletes=True)
+    receiver_messages = relationship('Message', foreign_keys="Message.receiver_id", back_populates='receiver', lazy=True, passive_deletes=True)
 
 
     def __repr__(self):
         return self.name
 
-    # @hybrid_property
-    # def tzname(self):
-    #     tz_name = Timezone.query.filter_by(pkid=self.tz_id).first()
-    #     if tz_name:
-    #         return tz_name.name
-    #     return 'UTC'
+    @property
+    def tzname(self):
+        tz_name = self.tz.name
+        if tz_name:
+            return tz_name
+        return 'UTC'
 
     def check_password(self, value):
         """Check password."""
@@ -114,15 +116,10 @@ class BlockedContact(TimeStampedUUIDModel):
     __tablename__ = 'blockedcontact'
 
     blocker_id = Column(UUID(as_uuid=True), ForeignKey('users.id'))
+    blocker = relationship("User", foreign_keys=[blocker_id], back_populates="blocker_blockedcontacts")
+
     blockee_id = Column(UUID(as_uuid=True), ForeignKey('users.id'))
-
-    # @hybrid_property
-    # def blocker(self):
-    #     return User.query.filter_by(id=self.blocker_id).first()
-
-    # @hybrid_property
-    # def blockee(self):
-    #     return User.query.filter_by(id=self.blockee_id).first()
+    blockee = relationship("User", foreign_keys=[blockee_id], back_populates="blockee_blockedcontacts")
 
     def __repr__(self):
         try:

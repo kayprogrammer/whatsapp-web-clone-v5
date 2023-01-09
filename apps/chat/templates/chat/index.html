@@ -166,7 +166,7 @@
                     <div class="h-text">
                         <div class="head">
                             <h4 title="Olivia" aria-label="Olivia">{% if i.sender_id == user.id %}{{i.receiver.name}}{% else %}{{i.sender.name}}{% endif %}</h4>
-                            <p class="time">{{i.created_at|threadsdatetimefilter}}</p>
+                            <p class="time">{{i.created_at|threadsdatetimefilter(user)}}</p>
                         </div>
                         <div class="message-chat">
                             <div class="chat-text-icon">

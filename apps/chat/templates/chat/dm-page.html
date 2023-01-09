@@ -51,9 +51,9 @@
 <div class="chatBox">
     <div id="chatmessages-list">
         {% for message in messages %}
-            {% if loop.changed(message.created_at|dms_datetimefilter) %}
+            {% if loop.changed(message.created_at|dms_datetimefilter(user)) %}
             <div class="chat__date-wrapper">
-                <span class="chat__date">{{message.created_at|dms_datetimefilter}}</span>
+                <span class="chat__date">{{message.created_at|dms_datetimefilter(user)}}</span>
             </div>
             {% endif %}
             {% if loop.index == 1 %}
@@ -627,7 +627,7 @@
     </div>
 </form>
 
-<script type="text/javascript">    
+<script type="text/javascript">
     $('.chat-footer').on('submit', function(e){
         e.preventDefault();
         $("#emoji-wrap").removeClass("emojis__wrapper--active");
@@ -640,13 +640,12 @@
             method: "POST",
             data: {
                 "phone": phone,
-                "message": message.val()
+                "message": message.val(),
+                "csrf_token": "{{csrf_token}}"
             },
             dataType: "json",
             success: function(response) {
-                console.log(response)
                 if (response?.success){
-
                     message.val('')
                     $('#chatmessages-list').append(`
                         <p id="last-msg" style="max-width: 45%;" class="chatMessage my-chat">
@@ -673,6 +672,18 @@
                     `)
                     document.getElementById('last-msg').scrollIntoView()
                 }
+            },
+            error: function(response){
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Error',
+                    text: response.responseJSON.detail,
+                    button: 'Ok',
+                    timer: 3000
+                }).then(() => {
+                    window.location.href = '/chat/home/'
+                })
+                
             }
         })
     })

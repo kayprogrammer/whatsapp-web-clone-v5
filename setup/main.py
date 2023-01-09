@@ -2,7 +2,7 @@ from typing import Union
 from fastapi import FastAPI, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware import Middleware
-from fastapi.responses import RedirectResponse
+from fastapi.responses import RedirectResponse, JSONResponse
 from fastapi_csrf_protect import CsrfProtect
 from fastapi_csrf_protect.exceptions import CsrfProtectError
 from starlette.middleware.sessions import SessionMiddleware
@@ -46,14 +46,17 @@ def auth_exception_handler(request: Request, exc: NotAuthenticatedException):
     response.delete_cookie("access_token")
     return response
 
-@app.exception_handler(CsrfProtectError)
-def csrf_protect_exception_handler(request: Request, exc: CsrfProtectError):
-    flash(request, exc.message, {"heading": "Invalid CSRF", "tag": "error"})
-    return RedirectResponse(request.url_for('home'))
-
 class CsrfSettings(BaseModel):
   secret_key:str = SECRET_KEY
 
 @CsrfProtect.load_config
 def get_csrf_config():
   return CsrfSettings()
+
+@app.exception_handler(CsrfProtectError)
+def csrf_protect_exception_handler(request: Request, exc: CsrfProtectError):
+    return JSONResponse(
+    status_code=exc.status_code,
+      content={ 'detail':  exc.message
+    }
+  )

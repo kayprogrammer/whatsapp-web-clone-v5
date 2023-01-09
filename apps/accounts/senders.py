@@ -57,9 +57,11 @@ class Util:
 
     @staticmethod
     def send_password_reset_email(background_tasks: BackgroundTasks, request, user, db):
-        current_site = f'{request.scheme}://{request.host}'
+        scheme = request.scope['scheme']
+        host = request.headers['host']
+        current_site = f'{scheme}://{host}'
         subject = 'Reset your password'
-        msg = Message(
+        msg = MessageSchema(
                 subject=subject,
                 recipients = [user.email],
                 template_body={'request': request, 'name': user.name, 'domain': current_site, 'site_name': SITE_NAME, 'token': Token.get_reset_token(user, db), 'user_id': user.id, 'sender_email': DEFAULT_FROM_EMAIL},

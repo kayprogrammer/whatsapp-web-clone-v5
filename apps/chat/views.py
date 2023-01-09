@@ -54,8 +54,6 @@ async def home(request: Request, user: User = Depends(get_current_user), csrf_pr
 @chatrouter.api_route('/show-direct-messages', methods=['POST'])
 async def show_dms(request: Request, response_class = HTMLResponse, user: User = Depends(get_current_user), db: Session = Depends(get_db), csrf_protect:CsrfProtect = Depends()):
     form_data = await request.form()
-    # csrf_token = csrf_protect.get_csrf_from_headers(request.headers)
-    # csrf_protect.validate_csrf(csrf_token)
     phone = form_data.get('phone')
     friend = db.query(User).filter_by(phone=phone).first()
     if not friend:
@@ -79,8 +77,8 @@ async def show_dms(request: Request, response_class = HTMLResponse, user: User =
 @chatrouter.api_route('/send-message', methods=['POST'])
 async def send_message(request: Request, user: User = Depends(get_current_user), db: Session = Depends(get_db), csrf_protect:CsrfProtect = Depends()):
     data = await request.form()
-    # csrf_token = csrf_protect.get_csrf_from_headers(request.headers)
-    # csrf_protect.validate_csrf(csrf_token)
+    csrf_token = data.get('csrf_token')
+    csrf_protect.validate_csrf(csrf_token)
     message = data.get('message')
     friend = db.query(User).filter_by(phone=data.get('phone')).first()
     if not friend:

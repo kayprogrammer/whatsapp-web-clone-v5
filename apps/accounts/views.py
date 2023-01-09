@@ -17,6 +17,7 @@ from . senders import Util
 from . tokens import Token
 from . utils import OAuth2PasswordBearerWithCookie
 from . exceptions import NotAuthenticatedException
+from . hashers import Hasher
 from pathlib import Path
 import pytz
 
@@ -54,7 +55,6 @@ async def register(backgroundtasks: BackgroundTasks, request: Request, response_
         )
         Util.send_verification_email(backgroundtasks, request, user, db)
         return templates.TemplateResponse('accounts/email-activation-request.html', {'request': request, 'detail':'sent', 'email':user.email})
-    print(form.errors)
     return templates.TemplateResponse('accounts/register.html', {'request': request, 'form': form})
 
 @accountsrouter.api_route('/activate-user/{token}/{user_id}/', methods=['GET'])
@@ -147,7 +147,6 @@ async def login(backgroundtasks: BackgroundTasks, request: Request, response_cla
         if password_check == False:
             flash(request, "Invalid credentials.", {"heading": "Error!", "tag": "error"})
             return templates.TemplateResponse('accounts/login.html', {'request': request, 'form':form}) 
-        print(user.is_phone_verified)
         if not user.is_email_verified:
             Util.send_verification_email(backgroundtasks, request, user, db)
             return templates.TemplateResponse('accounts/email-activation-request.html', {'request': request, 'detail': 'request', 'email': user.email})
@@ -169,18 +168,19 @@ def logout(request: Request, user: User = Depends(get_current_user)):
     return response
 
 @accountsrouter.api_route('/request-password-reset', methods=['GET', 'POST'])
-def password_reset_request(backgroundtasks: BackgroundTasks, request: Request, db: Session = Depends(get_db)):
+async def password_reset_request(backgroundtasks: BackgroundTasks, request: Request, db: Session = Depends(get_db)):
     detail = 'first_view'
-    form = PasswordResetRequestForm(request.form)
-    if form.validate_on_submit():
+    form_data = await request.form()
+    form = PasswordResetRequestForm(form_data)
+    if request.method == 'POST' and form.validate():
         user = db.query(User).filter_by(email=form.email.data).first()
         if user:
             Util.send_password_reset_email(backgroundtasks, request, user, db)
             request.session['password_reset_email'] = user.email
             detail = 'second_view'
-    return templates.TemplateResponse('accounts/password-reset-request.html', detail=detail, form=form)
+    return templates.TemplateResponse('accounts/password-reset-request.html', {'request': request, 'detail': detail, 'form': form})
 
-@accountsrouter.api_route('/verify-password-reset-token/<token>/<user_id>', methods=['GET', 'POST'])
+@accountsrouter.api_route('/verify-password-reset-token/{token}/{user_id}', methods=['GET', 'POST'])
 def verify_password_reset_token(request: Request, token, user_id, db: Session = Depends(get_db)):
     detail = 'invalid_token'
     form = None
@@ -197,29 +197,30 @@ def verify_password_reset_token(request: Request, token, user_id, db: Session = 
     elif user and user.id == user_obj.id:
         request.session['password_reset_email'] = user_obj.email
         return RedirectResponse(request.url_for('reset_password'))
-    return templates.TemplateResponse('accounts/password-reset.html', detail=detail, form=form, email=user_obj.email)
+    return templates.TemplateResponse('accounts/password-reset.html', {'request': request, 'detail': detail, 'form': form, 'email': user_obj.email})
 
 @accountsrouter.api_route('/reset-password', methods=['GET', 'POST'])
-def reset_password(request: Request, db: Session = Depends(get_db)):
+async def reset_password(request: Request, db: Session = Depends(get_db)):
+    form_data = await request.form()
     email=request.session.get('password_reset_email')
     user = db.query(User).filter_by(email=email).first()
     if not user:
         flash(request, "Not allowed.", {"heading": "Error!", "tag": "error"})
         return RedirectResponse(request.url_for('login'))
     detail = 'valid_token'
-    form = PasswordResetForm(request.form)
-    if form.validate_on_submit():
+    form = PasswordResetForm(form_data)
+    if request.method == 'POST' and form.validate():
         if user:
-            user.password = form.newpassword.data
+            user.password = Hasher.get_password_hash(form.newpassword.data)
             db.add(user)
             db.commit()
             db.refresh(user)
             flash(request, "Your password has been reset.", {"heading": "Success!", "tag": "success"})
             request.session['password_reset_email'] = None
             return RedirectResponse(request.url_for("login"))
-    return templates.TemplateResponse('accounts/password-reset.html', detail=detail, form=form, email=email)
+    return templates.TemplateResponse('accounts/password-reset.html', {'request': request, 'detail':detail, 'form':form, 'email':email})
 
-@accountsrouter.api_route('/resend-password-token/<email>', methods=['GET'])
+@accountsrouter.api_route('/resend-password-token/{email}', methods=['GET'])
 async def resend_password_token(backgroundtasks: BackgroundTasks, request: Request, email, db: Session = Depends(get_db)):
     detail = 'third_view'
     user = db.query(User).filter_by(email=email).first()
@@ -228,4 +229,4 @@ async def resend_password_token(backgroundtasks: BackgroundTasks, request: Reque
         return RedirectResponse(request.url_for("login"))
     
     await Util.send_password_reset_email(backgroundtasks, request, user, db)
-    return templates.TemplateResponse('accounts/password-reset-request.html', detail=detail, form=None)
+    return templates.TemplateResponse('accounts/password-reset-request.html', {'request': request, 'detail':detail, 'form':None})
