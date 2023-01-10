@@ -128,7 +128,7 @@ class OtpVerificationForm(Form):
         db.commit()
         db.refresh(user)
         if user.is_email_verified:
-            Util.send_welcome_email(self.background_tasks, self.request, user)
+            Util.send_welcome_email(self.request, user, self.background_tasks)
         return otp
 
 class PasswordResetRequestForm(Form):

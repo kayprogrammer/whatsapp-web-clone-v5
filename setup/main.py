@@ -35,7 +35,8 @@ app.include_router(statusrouter, prefix='/status')
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 # Initialize admin models
-from apps.accounts import admin
+from apps.accounts import admin as accounts_admin
+from apps.chat import admin as chat_admin
 
 @app.exception_handler(NotAuthenticatedException)
 def auth_exception_handler(request: Request, exc: NotAuthenticatedException):

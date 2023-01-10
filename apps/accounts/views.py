@@ -39,7 +39,7 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = De
 
 @accountsrouter.api_route('/register/', methods=['GET', 'POST'])
 @logout_required
-async def register(backgroundtasks: BackgroundTasks, request: Request, response_class = HTMLResponse, db: Session = Depends(get_db)):
+async def register(request: Request, backgroundtasks: BackgroundTasks, db: Session = Depends(get_db)):
     form_data = await request.form()
     form = RegisterForm(form_data, db=db)
     timezones = db.query(Timezone).all()
@@ -55,24 +55,24 @@ async def register(backgroundtasks: BackgroundTasks, request: Request, response_
             password=form.password.data,
             terms_agreement=form.terms_agreement.data,
         )
-        Util.send_verification_email(backgroundtasks, request, user, db)
+        Util.send_verification_email(request, user, db, backgroundtasks)
         return templates.TemplateResponse('accounts/email-activation-request.html', {'request': request, 'detail':'sent', 'email':user.email})
     return templates.TemplateResponse('accounts/register.html', {'request': request, 'form': form})
 
 @accountsrouter.api_route('/activate-user/{token}/{user_id}/', methods=['GET'])
 @logout_required
-def activate_user(backgroundtasks: BackgroundTasks, request: Request, token, user_id, response_class = HTMLResponse, db: Session = Depends(get_db)):
+def activate_user(request: Request, backgroundtasks: BackgroundTasks, token, user_id, db: Session = Depends(get_db)):
     user_obj = db.query(User).filter_by(id=user_id).first()
     if not user_obj:
         flash(request, "You entered an invalid link!", {"heading": "Invalid", "tag": "error"})
         return RedirectResponse(request.url_for("login"))
     user = Token.verify_activation_token(token, db)
     if not user:
+        print('yaa')
         return templates.TemplateResponse('accounts/email-activation-failed.html', {'request': request, 'email':user_obj.email})
     if user.id != user_obj.id:
         flash(request, "You entered an invalid link!", {"heading": "Invalid", "tag": "error"})
         return RedirectResponse(request.url_for("login"))
-
     user.current_activation_jwt['used'] = True
     user.is_email_verified = True
     db.add(user)
@@ -86,14 +86,14 @@ def activate_user(backgroundtasks: BackgroundTasks, request: Request, token, use
         return RedirectResponse(request.url_for('verify_otp'))
 
     flash(request, "Activation successful!.", {"heading": "Done", "tag": "success"})
-    Util.send_welcome_email(backgroundtasks, request, user)
+    Util.send_welcome_email(request, user, backgroundtasks)
     return RedirectResponse(request.url_for("login"))
 
 @accountsrouter.api_route('/resend-activation-email/', methods=['GET'])
 @logout_required
-def resend_activation_email(backgroundtasks: BackgroundTasks, request: Request, response_class = HTMLResponse, db: Session = Depends(get_db)):
+def resend_activation_email(request: Request, backgroundtasks: BackgroundTasks, db: Session = Depends(get_db)):
     email = request.cookies.get('activation_email')
-    user_obj = User.query.filter_by(email=email).first()
+    user_obj = db.query(User).filter_by(email=email).first()
     if not user_obj:
         flash(request, "Something went wrong!.", {"heading": "error", "tag": "error"})
         return RedirectResponse(request.url_for("login"))
@@ -101,12 +101,12 @@ def resend_activation_email(backgroundtasks: BackgroundTasks, request: Request, 
         flash(request, "Your email address has already been verified!.", {"heading": "Verified", "tag": "info"})
         return RedirectResponse(request.url_for("login"))
 
-    Util.send_verification_email(backgroundtasks, request, user_obj, db)
+    Util.send_verification_email(request, user_obj, db, backgroundtasks)
     return templates.TemplateResponse('accounts/email-activation-request.html', {'request': request, 'detail':'resent', 'email':email})
 
 @accountsrouter.api_route('/verify-otp', methods=['GET', 'POST'])
 @logout_required
-async def verify_otp(background_tasks: BackgroundTasks, request: Request, response_class = HTMLResponse, db: Session = Depends(get_db)):
+async def verify_otp(request: Request, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
     form_data = await request.form()
     phone = request.session.get('verification_phone')
     if not phone:
@@ -140,7 +140,7 @@ def resend_otp(request: Request, db: Session = Depends(get_db)):
 
 @accountsrouter.api_route('/login', methods=['GET', 'POST'])
 @logout_required
-async def login(backgroundtasks: BackgroundTasks, request: Request, response_class = HTMLResponse, db: Session = Depends(get_db)):
+async def login(request: Request, backgroundtasks: BackgroundTasks, db: Session = Depends(get_db)):
     request.session['password_reset_email'] = None
     form_data = await request.form()
 
@@ -155,7 +155,7 @@ async def login(backgroundtasks: BackgroundTasks, request: Request, response_cla
             flash(request, "Invalid credentials.", {"heading": "Error!", "tag": "error"})
             return templates.TemplateResponse('accounts/login.html', {'request': request, 'form':form}) 
         if not user.is_email_verified:
-            Util.send_verification_email(backgroundtasks, request, user, db)
+            Util.send_verification_email(request, user, db, backgroundtasks)
             return templates.TemplateResponse('accounts/email-activation-request.html', {'request': request, 'detail': 'request', 'email': user.email})
 
         if not user.is_phone_verified:
@@ -176,14 +176,14 @@ def logout(request: Request, user: User = Depends(get_current_user)):
 
 @accountsrouter.api_route('/request-password-reset', methods=['GET', 'POST'])
 @logout_required
-async def password_reset_request(backgroundtasks: BackgroundTasks, request: Request, db: Session = Depends(get_db)):
+async def password_reset_request(request: Request, backgroundtasks: BackgroundTasks, db: Session = Depends(get_db)):
     detail = 'first_view'
     form_data = await request.form()
     form = PasswordResetRequestForm(form_data)
     if request.method == 'POST' and form.validate():
         user = db.query(User).filter_by(email=form.email.data).first()
         if user:
-            Util.send_password_reset_email(backgroundtasks, request, user, db)
+            Util.send_password_reset_email(request, user, db, backgroundtasks)
             request.session['password_reset_email'] = user.email
             detail = 'second_view'
     return templates.TemplateResponse('accounts/password-reset-request.html', {'request': request, 'detail': detail, 'form': form})
@@ -232,12 +232,12 @@ async def reset_password(request: Request, db: Session = Depends(get_db)):
 
 @accountsrouter.api_route('/resend-password-token/{email}', methods=['GET'])
 @logout_required
-async def resend_password_token(backgroundtasks: BackgroundTasks, request: Request, email, db: Session = Depends(get_db)):
+async def resend_password_token(request: Request, backgroundtasks: BackgroundTasks, email, db: Session = Depends(get_db)):
     detail = 'third_view'
     user = db.query(User).filter_by(email=email).first()
     if not user:
         flash(request, "Something went wrong.", {"heading": "Error!", "tag": "error"})
         return RedirectResponse(request.url_for("login"))
     
-    await Util.send_password_reset_email(backgroundtasks, request, user, db)
+    await Util.send_password_reset_email(request, user, db, backgroundtasks)
     return templates.TemplateResponse('accounts/password-reset-request.html', {'request': request, 'detail':detail, 'form':None})

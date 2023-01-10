@@ -8,7 +8,7 @@ import jwt
 
 class Util:
     @staticmethod
-    def send_verification_email(background_tasks: BackgroundTasks, request, user, db):
+    def send_verification_email(request, user, db, background_tasks: BackgroundTasks):
         scheme = request.scope['scheme']
         host = request.headers['host']
         current_site = f'{scheme}://{host}'
@@ -39,7 +39,7 @@ class Util:
         SmsMessageThread(body, from_, to).start()
 
     @staticmethod
-    def send_welcome_email(background_tasks: BackgroundTasks, request, user):
+    def send_welcome_email(request, user, background_tasks: BackgroundTasks):
         scheme = request.scope['scheme']
         host = request.headers['host']
         current_site = f'{scheme}://{host}'
@@ -56,7 +56,7 @@ class Util:
 
 
     @staticmethod
-    def send_password_reset_email(background_tasks: BackgroundTasks, request, user, db):
+    def send_password_reset_email(request, user, db, background_tasks: BackgroundTasks):
         scheme = request.scope['scheme']
         host = request.headers['host']
         current_site = f'{scheme}://{host}'

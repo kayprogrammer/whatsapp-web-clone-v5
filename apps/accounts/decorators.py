@@ -1,6 +1,7 @@
 from starlette.responses import RedirectResponse
 from fastapi import Request
 import functools
+import asyncio
 
 def logout_required(func):
     @functools.wraps(func)
@@ -8,5 +9,8 @@ def logout_required(func):
         # Check if access token in header
         if request.cookies.get("access_token"):
             return RedirectResponse(request.url_for('home'))
-        return await func(request, *args, **kwargs)
+        result = func(request, *args, **kwargs)
+        if asyncio.iscoroutine(result):
+            return await result
+        return result
     return wrapper

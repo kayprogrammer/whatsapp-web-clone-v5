@@ -10,8 +10,11 @@ class SmsMessageThread(threading.Thread):
         threading.Thread.__init__(self)
 
     def run(self):
-        client.messages.create(
-            body = self.body,
-            from_ = self.from_,
-            to = self.to
-        )
+        try:
+            client.messages.create(
+                body = self.body,
+                from_ = self.from_,
+                to = self.to
+            )
+        except:
+            pass
